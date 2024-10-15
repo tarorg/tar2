@@ -14,5 +14,9 @@ export default defineConfig({
     ssr: {
       noExternal: ['tinybase'],
     },
+    define: {
+      'process.env.TURSO_DATABASE_URL': JSON.stringify(process.env.TURSO_DATABASE_URL),
+      'process.env.TURSO_AUTH_TOKEN': JSON.stringify(process.env.TURSO_AUTH_TOKEN),
+    },
   },
 });

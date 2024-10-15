@@ -1,5 +1,21 @@
 ---
 import Menu from '../../components/Menu.astro';
+import { createClient } from '@libsql/client';
+
+// Initialize Turso client
+const client = createClient({
+  url: import.meta.env.TURSO_DATABASE_URL,
+  authToken: import.meta.env.TURSO_AUTH_TOKEN,
+});
+
+// Fetch initial instances from Turso (limited to 100)
+let instances = [];
+try {
+  const result = await client.execute('SELECT sku, qty FROM Instances LIMIT 100');
+  instances = result.rows;
+} catch (error) {
+  console.error('Error fetching initial instances:', error);
+}
 ---
 
 <html lang="en">
@@ -12,13 +28,33 @@ import Menu from '../../components/Menu.astro';
     <Menu />
     <main>
         <div class="search-container">
-            <input type="text" class="search-bar" placeholder="Search...">
-            <button class="search-button">
+            <input type="text" id="searchBar" class="search-bar" placeholder="Search...">
+            <button id="searchButton" class="search-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
             </button>
+        </div>
+
+        <!-- Notion-like table -->
+        <div class="table-container">
+            <table class="instances-table">
+                <thead>
+                    <tr>
+                        <th class="border-r">SKU</th>
+                        <th>QTY</th>
+                    </tr>
+                </thead>
+                <tbody id="instancesTableBody">
+                    {instances.map((instance: { sku: string; qty: number }) => (
+                        <tr>
+                            <td class="border-r">{instance.sku}</td>
+                            <td>{instance.qty}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     </main>
     
@@ -29,50 +65,51 @@ import Menu from '../../components/Menu.astro';
 
 <style>
     body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+        color: #37352f;
     }
     main {
         padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
     }
     .search-container {
         display: flex;
         justify-content: center;
         align-items: center;
-        margin-top: 20px;
+        margin-bottom: 20px;
     }
     .search-bar {
         width: 80%;
         max-width: 500px;
         padding: 10px 15px;
         font-size: 16px;
-        border: 1px solid #ddd;
-        border-radius: 25px 0 0 25px;
+        border: 1px solid #e0e0e0;
+        border-radius: 3px 0 0 3px;
         outline: none;
     }
     .search-button {
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
+        background-color: #f7f7f7;
+        border: 1px solid #e0e0e0;
         border-left: none;
         padding: 10px 15px;
-        border-radius: 0 25px 25px 0;
+        border-radius: 0 3px 3px 0;
         cursor: pointer;
         transition: background-color 0.3s;
     }
     .search-button:hover {
-        background-color: #e0e0e0;
+        background-color: #ebebeb;
     }
     .fab {
         position: fixed;
-        bottom: 100px; /* Moved up a little */
-        right: 50px; /* Moved left a little */
+        bottom: 30px;
+        right: 30px;
         width: 56px;
         height: 56px;
-        border-radius: 5px;
-        background-color: white;
-        color: #808080; /* Changed to grey */
-        border: 2px solid #d3d3d3;
+        border-radius: 50%;
+        background-color: #0077ff;
+        color: white;
+        border: none;
         font-size: 24px;
         cursor: pointer;
         display: flex;
@@ -80,41 +117,73 @@ import Menu from '../../components/Menu.astro';
         justify-content: center;
         transition: background-color 0.3s, transform 0.3s;
         z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
     .fab:hover {
-        background-color: #f0f0f0;
+        background-color: #0066dd;
     }
     .fab:active {
         transform: scale(0.95);
+    }
+    .table-container {
+        overflow-x: auto;
+        border-left: 1px solid #e0e0e0;
+        border-right: 1px solid #e0e0e0;
+    }
+    .instances-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 14px;
+    }
+    .instances-table th,
+    .instances-table td {
+        padding: 8px 16px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .instances-table th {
+        font-weight: 600;
+        color: #6b7280;
+        background-color: #fafafa;
+        border-top: 1px solid #e0e0e0;
+    }
+    .instances-table tr:hover {
+        background-color: #f9f9f9;
+    }
+    .instances-table .border-r {
+        border-right: 1px solid #e0e0e0;
     }
 </style>
 
 <script>
     const fab = document.querySelector('.fab');
+    const searchBar = document.getElementById('searchBar') as HTMLInputElement;
+    const instancesTableBody = document.getElementById('instancesTableBody');
+
     if (fab) {
         fab.addEventListener('click', () => {
             window.location.href = '/pin/p';
         });
     }
 
-    const searchButton = document.querySelector('.search-button');
-    const searchBar = document.querySelector('.search-bar');
-
-    if (searchButton && searchBar) {
-        searchButton.addEventListener('click', () => {
-            performSearch();
-        });
-
-        searchBar.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
+    if (searchBar) {
+        searchBar.addEventListener('input', performSearch);
     }
 
     function performSearch() {
-        const searchTerm = searchBar.value;
-        console.log('Searching for:', searchTerm);
-        // Implement your search functionality here
+        const searchTerm = searchBar.value.trim().toLowerCase();
+        const rows = instancesTableBody?.querySelectorAll('tr');
+
+        rows?.forEach((row) => {
+            const sku = row.cells[0].textContent?.toLowerCase() || '';
+            const qty = row.cells[1].textContent?.toLowerCase() || '';
+
+            if (sku.includes(searchTerm) || qty.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
     }
 </script>

@@ -1,6 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Menu from '../components/Menu.astro';
+import db from '../lib/db';
+
+// Fetch products from Turso DB
+const result = await db.execute('SELECT * FROM products');
+const products = result.rows;
 ---
 
 <Layout title="Products">
@@ -16,7 +21,14 @@ import Menu from '../components/Menu.astro';
       </div>
     </div>
     <div class="product-list">
-      <!-- Product items will be inserted here by JavaScript -->
+      {products.map((product) => (
+        <div class="product-item">
+          <div class="product-header" data-id={product.id}>
+            <span class="product-name">{product.Name || ''}</span>
+            <span class="product-type">{product.Type || ''}</span>
+          </div>
+        </div>
+      ))}
     </div>
   </main>
 
@@ -125,65 +137,26 @@ import Menu from '../components/Menu.astro';
 </style>
 
 <script>
-  document.addEventListener('DOMContentLoaded', async () => {
-    const productList = document.querySelector('.product-list');
+  document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
+    const productList = document.querySelector('.product-list');
 
-    let db;
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const productItems = productList.querySelectorAll('.product-item');
 
-    const openDB = () => {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open('productdb', 2);
-        request.onerror = (event) => reject('IndexedDB error: ' + event.target.error);
-        request.onsuccess = (event) => resolve(event.target.result);
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result;
-          if (!db.objectStoreNames.contains('core')) {
-            db.createObjectStore('core', { keyPath: 'id' });
+        productItems.forEach(item => {
+          const productName = item.querySelector('.product-name').textContent.toLowerCase();
+          const productId = item.querySelector('.product-header').dataset.id.toLowerCase();
+          
+          if (productName.includes(searchTerm) || productId.includes(searchTerm)) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
           }
-        };
-      });
-    };
-
-    const getAllProducts = () => {
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(['core'], 'readonly');
-        const objectStore = transaction.objectStore('core');
-        const request = objectStore.getAll();
-        request.onerror = (event) => reject('Error fetching products: ' + event.target.error);
-        request.onsuccess = (event) => resolve(event.target.result);
-      });
-    };
-
-    function renderProducts(products) {
-      if (!productList) return;
-      productList.innerHTML = '';
-      if (products.length === 0) {
-        productList.innerHTML = '<div class="product-item"><div class="product-header">No products found</div></div>';
-      } else {
-        products.forEach(product => {
-          const productItem = document.createElement('div');
-          productItem.className = 'product-item';
-          productItem.innerHTML = `
-            <div class="product-header" data-id="${product.id}">
-              <span class="product-name">${product.Name || ''}</span>
-              <span class="product-type">${product.Type || ''}</span>
-            </div>
-          `;
-          productList.appendChild(productItem);
         });
-      }
-    }
-
-    try {
-      db = await openDB();
-      const products = await getAllProducts();
-      renderProducts(products);
-    } catch (error) {
-      console.error('Error:', error);
-      if (productList) {
-        productList.innerHTML = `<div class="product-item"><div class="product-header" style="color: red;">Error loading products: ${error}</div></div>`;
-      }
+      });
     }
 
     if (productList) {
@@ -192,22 +165,6 @@ import Menu from '../components/Menu.astro';
         if (productHeader) {
           const productId = productHeader.dataset.id;
           window.location.href = `/prod?id=${productId}`;
-        }
-      });
-    }
-
-    if (searchInput) {
-      searchInput.addEventListener('input', async function() {
-        const searchTerm = this.value.toLowerCase();
-        try {
-          const allProducts = await getAllProducts();
-          const filteredProducts = allProducts.filter(product => 
-            product.Name.toLowerCase().includes(searchTerm) ||
-            product.id.toLowerCase().includes(searchTerm)
-          );
-          renderProducts(filteredProducts);
-        } catch (error) {
-          console.error('Error searching products:', error);
         }
       });
     }
